@@ -1,6 +1,6 @@
 """An MCP server with the mistakes mcp-doctor looks for. Run it with mcp-doctor to see the report.
 
-    mcp-doctor check --stdio "python examples/messy_server.py" --smoke
+mcp-doctor check --stdio "python examples/messy_server.py" --smoke
 """
 
 from __future__ import annotations

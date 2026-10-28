@@ -1,6 +1,6 @@
 """A small, well-described MCP server that passes every mcp-doctor rule that matters.
 
-    mcp-doctor check --stdio "python examples/clean_server.py" --smoke
+mcp-doctor check --stdio "python examples/clean_server.py" --smoke
 """
 
 from __future__ import annotations
