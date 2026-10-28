@@ -8,7 +8,9 @@ _SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 _URI_CHARS = re.compile(r"^[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]*$")
 _BAD_PERCENT = re.compile(r"%(?![0-9A-Fa-f]{2})")
 _EXPRESSION = re.compile(r"\{([^{}]*)\}")
-_VARSPEC = re.compile(r"^(?:[A-Za-z0-9_]|%[0-9A-Fa-f]{2})(?:\.?(?:[A-Za-z0-9_]|%[0-9A-Fa-f]{2}))*(?::[1-9]\d{0,3}|\*)?$")
+_VARSPEC = re.compile(
+    r"^(?:[A-Za-z0-9_]|%[0-9A-Fa-f]{2})(?:\.?(?:[A-Za-z0-9_]|%[0-9A-Fa-f]{2}))*(?::[1-9]\d{0,3}|\*)?$"
+)
 _OPERATORS = "+#./;?&"
 
 

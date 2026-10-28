@@ -67,7 +67,7 @@ def slow_tools_list(snapshot: Snapshot) -> Iterator[Violation]:
     Severity.ERROR,
     Scope.CONNECTION,
     "A list request for an advertised capability failed",
-    "The server advertised this capability in initialize but errored when asked; fix the handler or drop the capability.",
+    "The server advertised this capability but the request errored; fix the handler or drop the capability.",
 )
 def list_request_failed(snapshot: Snapshot) -> Iterator[Violation]:
     for method, error in sorted(snapshot.list_errors.items()):
