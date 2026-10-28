@@ -64,7 +64,7 @@ def print_rules(console: Console, rules: list[Rule]) -> None:
     table.add_column("Checks for")
     for rule in rules:
         table.add_row(
-            rule.id, Text(rule.severity.value, style=SEVERITY_STYLE[rule.severity]), rule.scope.value, rule.title
+            rule.id, Text(rule.severity.value, style=SEVERITY_STYLE[rule.severity]), rule.scope.value, Text(rule.title)
         )
     console.print(table)
 
