@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from mcp import Client, MCPError
-from mcp_types import REQUEST_TIMEOUT, CallToolResult, TextContent
+from mcp_types import MISSING_REQUIRED_CLIENT_CAPABILITY, REQUEST_TIMEOUT, CallToolResult, TextContent
 
 from mcp_doctor.models import Finding, JSONDict, SmokeResult, SmokeStatus
 from mcp_doctor.probe import describe_exception, elapsed_ms
@@ -105,6 +105,9 @@ async def _call(client: Client, name: str, arguments: JSONDict, timeout: float) 
     try:
         result = await client.call_tool(name, arguments, read_timeout_seconds=timeout)
     except MCPError as exc:
+        if exc.code == MISSING_REQUIRED_CLIENT_CAPABILITY:
+            detail = f"needs a client capability mcp-doctor does not offer: {exc.message}"
+            return SmokeResult(tool=name, status=SmokeStatus.SKIPPED, duration_ms=elapsed_ms(start), detail=detail)
         status = SmokeStatus.TIMEOUT if exc.code == REQUEST_TIMEOUT else SmokeStatus.PROTOCOL_ERROR
         detail = f"no response within {timeout:g}s" if status is SmokeStatus.TIMEOUT else describe_exception(exc)
         return SmokeResult(tool=name, status=status, duration_ms=elapsed_ms(start), detail=detail)
