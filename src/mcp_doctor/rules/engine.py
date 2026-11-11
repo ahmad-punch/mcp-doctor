@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 
-from mcp_doctor.models import Finding, Snapshot
+from mcp_doctor.models import Finding, Severity, Snapshot
 from mcp_doctor.rules.registry import Rule, all_rules
 
 
@@ -26,3 +26,8 @@ def finding(rule: Rule, target: str, message: str) -> Finding:
 def sort_findings(findings: list[Finding]) -> list[Finding]:
     """Order findings by severity, then rule ID, then target, for stable output."""
     return sorted(findings, key=lambda f: (f.severity.rank, f.rule, f.target))
+
+
+def with_severity(findings: list[Finding], overrides: Mapping[str, Severity]) -> list[Finding]:
+    """Apply per-rule severity overrides from the settings file."""
+    return [f.model_copy(update={"severity": overrides[f.rule]}) if f.rule in overrides else f for f in findings]

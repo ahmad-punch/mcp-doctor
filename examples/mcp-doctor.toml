@@ -1,0 +1,16 @@
+# Settings for checking examples/messy_server.py. In your own repository, put this file
+# next to the code as mcp-doctor.toml (or under [tool.mcp-doctor] in pyproject.toml) and
+# mcp-doctor picks it up without --settings.
+
+[rules]
+# The messy server does not send instructions on purpose; stop reporting it.
+disable = ["S001"]
+
+[rules.severity]
+# Near-duplicate tool names confuse models badly enough to fail the build.
+T010 = "error"
+
+[smoke.args]
+# Arguments for tools with required parameters, so --smoke calls them too.
+getNote = { name = "welcome" }
+get_note = { name = "welcome" }

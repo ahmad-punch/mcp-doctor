@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import tempfile
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import IO
 
 from mcp import Client
 
 from mcp_doctor.connect import build_client
-from mcp_doctor.models import Report
+from mcp_doctor.models import Report, Severity
 from mcp_doctor.probe import collect, describe_exception, elapsed_ms
 from mcp_doctor.rules import lint
-from mcp_doctor.rules.engine import sort_findings
+from mcp_doctor.rules.engine import sort_findings, with_severity
 from mcp_doctor.scoring import score
 from mcp_doctor.smoke import SmokeOptions, run_smoke, smoke_findings
 from mcp_doctor.targets import Target, TransportKind
@@ -29,6 +30,7 @@ class CheckOptions:
     timeout: float = 30.0
     smoke: SmokeOptions | None = None
     ignore: frozenset[str] = field(default_factory=frozenset)
+    severity: Mapping[str, Severity] = field(default_factory=dict)
 
 
 async def check_target(target: Target, options: CheckOptions) -> Report:
@@ -55,7 +57,9 @@ async def check_client(client: Client, label: str, options: CheckOptions) -> Rep
             snapshot = await collect(client, elapsed_ms(start))
             findings = lint(snapshot, options.ignore)
             smoke = await run_smoke(client, snapshot.tools, options.smoke) if options.smoke else []
-            findings = sort_findings([*findings, *smoke_findings(smoke, options.ignore)])
+            findings = sort_findings(
+                with_severity([*findings, *smoke_findings(smoke, options.ignore)], options.severity)
+            )
             report = Report(
                 target=label, connected=True, snapshot=snapshot, findings=findings, smoke=smoke, score=score(findings)
             )

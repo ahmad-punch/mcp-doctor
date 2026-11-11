@@ -19,6 +19,7 @@ from mcp_doctor.models import Report, Severity
 from mcp_doctor.render import print_report, print_rules, to_json
 from mcp_doctor.rules import all_rules, known_ids
 from mcp_doctor.sarif import find_source, to_sarif
+from mcp_doctor.settings import Settings, SettingsError, discover_settings, read_settings
 from mcp_doctor.smoke import SmokeArgsError, SmokeOptions, parse_tool_args
 from mcp_doctor.targets import Target, TargetError, TransportKind, stdio_target, url_target
 
@@ -94,6 +95,13 @@ def check(
     ] = None,
     smoke_timeout: Annotated[float, typer.Option(help="Seconds to wait for each smoke call.")] = 10.0,
     timeout: Annotated[float, typer.Option(help="Seconds to wait for each request during the check.")] = 30.0,
+    settings_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--settings",
+            help="Settings file. Default: ./mcp-doctor.toml, else the tool.mcp-doctor table in ./pyproject.toml.",
+        ),
+    ] = None,
     rules: Annotated[str | None, typer.Option(help="Only run these rule IDs, comma separated.")] = None,
     ignore: Annotated[list[str] | None, typer.Option(help="Rule IDs to skip, comma separated. Repeatable.")] = None,
     fail_on: Annotated[FailOn, typer.Option(help="Exit 1 when a finding is at least this severe.")] = FailOn.ERROR,
@@ -112,16 +120,21 @@ def check(
     """Connect to an MCP server, lint what it exposes, and print a health report."""
     try:
         fmt = _output_format(output_format, json_output)
+        settings = read_settings(settings_file) if settings_file else discover_settings(Path())
         targets = _targets(stdio, url, transport, header or [], config, server)
+        smoke_args = {**settings.smoke_args, **parse_tool_args(tool_args or [])}
         options = CheckOptions(
             protocol=protocol.value,
             timeout=timeout,
-            smoke=SmokeOptions(timeout=smoke_timeout, args=parse_tool_args(tool_args or [])) if smoke else None,
-            ignore=frozenset(_skipped_rules(rules, ignore or [])),
+            smoke=SmokeOptions(timeout=smoke_timeout, args=smoke_args) if smoke else None,
+            ignore=frozenset(_skipped_rules(rules, ignore or [], settings)),
+            severity=settings.severity,
         )
-    except (UsageError, TargetError, ConfigError, SmokeArgsError) as exc:
+    except (UsageError, TargetError, ConfigError, SmokeArgsError, SettingsError) as exc:
         err_console.print(f"[bold red]error:[/] {exc}")
         raise typer.Exit(EXIT_USAGE) from exc
+    if fmt is OutputFormat.TEXT and settings.path is not None:
+        console.print(f"[dim]Using settings from {settings.path}[/]")
     reports = [anyio.run(check_target, target, options) for target in targets]
     if fmt is OutputFormat.SARIF:
         sources = [find_source(target, Path.cwd(), config, source_file) for target in targets]
@@ -210,14 +223,16 @@ def _no_target_message() -> str:
     return "\n".join(lines)
 
 
-def _skipped_rules(selected: str | None, ignored: list[str]) -> set[str]:
+def _skipped_rules(selected: str | None, ignored: list[str], settings: Settings) -> set[str]:
+    """Rules to skip. Rules named in --rules run even when the settings file disables them."""
     known = known_ids()
     skip = {rule_id for item in ignored for rule_id in _split_ids(item)}
-    keep = set(_split_ids(selected)) if selected else known
-    unknown = sorted((skip | keep) - known)
+    chosen = set(_split_ids(selected)) if selected else set()
+    unknown = sorted((skip | chosen) - known)
     if unknown:
         raise UsageError(f"unknown rule ID(s): {', '.join(unknown)}; run `mcp-doctor rules` to list them")
-    return skip | (known - keep)
+    not_chosen = known - chosen if selected else set()
+    return skip | not_chosen | (settings.disabled - chosen)
 
 
 def _split_ids(value: str) -> list[str]:
