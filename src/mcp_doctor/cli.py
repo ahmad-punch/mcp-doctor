@@ -18,6 +18,7 @@ from mcp_doctor.doctor import CheckOptions, check_target
 from mcp_doctor.models import Report, Severity
 from mcp_doctor.render import print_report, print_rules, to_json
 from mcp_doctor.rules import all_rules, known_ids
+from mcp_doctor.sarif import find_source, to_sarif
 from mcp_doctor.smoke import SmokeArgsError, SmokeOptions, parse_tool_args
 from mcp_doctor.targets import Target, TargetError, TransportKind, stdio_target, url_target
 
@@ -43,6 +44,14 @@ class FailOn(str, Enum):
     WARNING = "warning"
     INFO = "info"
     NEVER = "never"
+
+
+class OutputFormat(str, Enum):
+    """How ``check`` prints its reports."""
+
+    TEXT = "text"
+    JSON = "json"
+    SARIF = "sarif"
 
 
 class Protocol(str, Enum):
@@ -88,13 +97,21 @@ def check(
     rules: Annotated[str | None, typer.Option(help="Only run these rule IDs, comma separated.")] = None,
     ignore: Annotated[list[str] | None, typer.Option(help="Rule IDs to skip, comma separated. Repeatable.")] = None,
     fail_on: Annotated[FailOn, typer.Option(help="Exit 1 when a finding is at least this severe.")] = FailOn.ERROR,
-    json_output: Annotated[bool, typer.Option("--json", help="Print a JSON report instead of tables.")] = False,
+    output_format: Annotated[
+        OutputFormat, typer.Option("--format", help="text (tables), json, or sarif for code scanning.")
+    ] = OutputFormat.TEXT,
+    json_output: Annotated[bool, typer.Option("--json", help="Shorthand for --format json.")] = False,
+    source_file: Annotated[
+        Path | None,
+        typer.Option(help="File SARIF results point at. Default: the script in the server command, else --config."),
+    ] = None,
     protocol: Annotated[Protocol, typer.Option(help="auto tries the newest handshake; legacy forces initialize.")] = (
         Protocol.AUTO
     ),
 ) -> None:
     """Connect to an MCP server, lint what it exposes, and print a health report."""
     try:
+        fmt = _output_format(output_format, json_output)
         targets = _targets(stdio, url, transport, header or [], config, server)
         options = CheckOptions(
             protocol=protocol.value,
@@ -106,7 +123,10 @@ def check(
         err_console.print(f"[bold red]error:[/] {exc}")
         raise typer.Exit(EXIT_USAGE) from exc
     reports = [anyio.run(check_target, target, options) for target in targets]
-    if json_output:
+    if fmt is OutputFormat.SARIF:
+        sources = [find_source(target, Path.cwd(), config, source_file) for target in targets]
+        sys.stdout.write(to_sarif(reports, sources, all_rules()) + "\n")
+    elif fmt is OutputFormat.JSON:
         sys.stdout.write(to_json(reports) + "\n")
     else:
         for report in reports:
@@ -145,6 +165,14 @@ def exit_code(reports: list[Report], fail_on: FailOn) -> int:
     threshold = Severity(fail_on.value)
     worst = [report.worst_severity() for report in reports]
     return EXIT_FINDINGS if any(sev is not None and sev.at_least(threshold) for sev in worst) else EXIT_OK
+
+
+def _output_format(chosen: OutputFormat, json_flag: bool) -> OutputFormat:
+    if not json_flag:
+        return chosen
+    if chosen not in (OutputFormat.TEXT, OutputFormat.JSON):
+        raise UsageError(f"--json conflicts with --format {chosen.value}; pass only one of them")
+    return OutputFormat.JSON
 
 
 def _targets(
