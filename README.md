@@ -228,6 +228,7 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the main trade-off.
 
 - `--watch` mode that re-checks a local server on file changes.
 - Per-target suppressions in `mcp-doctor.toml`, to silence one rule for one tool instead of everywhere.
+- A `--baseline` file so CI fails only on findings that are new since the last accepted run.
 
 ## Contributing
 
